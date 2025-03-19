@@ -62,8 +62,11 @@ from models.effect_factory import EffectFactory
 from controllers.osc_handler import OSCHandlerFactory
 from controllers.effect_manager import EffectManager
 from controllers.segment_manager import SegmentManager
+from controllers.device_manager import DeviceManager
+from controllers.timeline_manager import TimelineManager
 from views.simulator import LEDSimulator
 from views.preview import LargeScalePreview, PreviewSettings
+from views.multi_device_preview import MultiDevicePreview
 from services.clustering import ClusteringService
 from services.scheduler import Scheduler, Priority
 from services.distribution import DistributionService
@@ -79,12 +82,16 @@ def parse_args():
     parser = argparse.ArgumentParser(description='LED Tape Light System')
     parser.add_argument('--no-gui', action='store_true', help='Run without GUI')
     parser.add_argument('--preview', action='store_true', help='Run with large-scale preview')
+    parser.add_argument('--multi-device', action='store_true', help='Run with multi-device preview')
     parser.add_argument('--headless', action='store_true', help='Run in headless mode')
     parser.add_argument('--osc-ip', type=str, default=config.OSC_SERVER_IP, help='OSC server IP')
     parser.add_argument('--osc-port', type=int, default=config.OSC_SERVER_PORT, help='OSC server port')
     parser.add_argument('--led-count', type=int, default=config.DEFAULT_LED_COUNT, help='Number of LEDs')
     parser.add_argument('--fps', type=int, default=config.MAX_FPS, help='Frames per second')
     parser.add_argument('--workers', type=int, default=config.MAX_WORKERS, help='Number of workers')
+    parser.add_argument('--device-config', type=str, help='Device configuration file')
+    parser.add_argument('--layout-config', type=str, help='Layout configuration file')
+    parser.add_argument('--timeline-config', type=str, help='Timeline configuration file')
     parser.add_argument('--skip-gpu-check', action='store_true', help='Skip GPU acceleration check')
     parser.add_argument('--show-config', action='store_true', help='Show configuration and exit')
     return parser.parse_args()
@@ -234,6 +241,63 @@ def create_demo_effects(effect_factory: EffectFactory,
     return effects
 
 
+def setup_demo_device_manager() -> DeviceManager:
+    """
+    Set up a demo device manager with some virtual devices.
+    
+    Returns:
+        DeviceManager: Device manager with demo devices
+    """
+    device_manager = DeviceManager()
+    
+    # Thêm các thiết bị ảo để demo
+    device_manager.add_device("dev1", "ESP32-Demo-1", "127.0.0.1", 8888)
+    device_manager.add_device("dev2", "ESP32-Demo-2", "127.0.0.1", 8889)
+    device_manager.add_device("dev3", "ESP32-Demo-3", "127.0.0.1", 8890)
+    
+    # Cập nhật thông tin thiết bị
+    for device_id in ["dev1", "dev2", "dev3"]:
+        device = device_manager.devices.get(device_id)
+        if device:
+            device.led_count = 150
+            device.segment_count = 3
+            
+    # Thêm các segment cho từng thiết bị
+    device_manager.add_segment("seg1", "dev1", 0, 49, "Segment 1-1", (255, 100, 100))
+    device_manager.add_segment("seg2", "dev1", 50, 99, "Segment 1-2", (100, 255, 100))
+    device_manager.add_segment("seg3", "dev1", 100, 149, "Segment 1-3", (100, 100, 255))
+    
+    device_manager.add_segment("seg4", "dev2", 0, 49, "Segment 2-1", (255, 255, 100))
+    device_manager.add_segment("seg5", "dev2", 50, 99, "Segment 2-2", (255, 100, 255))
+    device_manager.add_segment("seg6", "dev2", 100, 149, "Segment 2-3", (100, 255, 255))
+    
+    device_manager.add_segment("seg7", "dev3", 0, 49, "Segment 3-1", (255, 150, 50))
+    device_manager.add_segment("seg8", "dev3", 50, 99, "Segment 3-2", (50, 150, 255))
+    device_manager.add_segment("seg9", "dev3", 100, 149, "Segment 3-3", (150, 255, 50))
+    
+    return device_manager
+
+
+def setup_demo_timeline(timeline_manager: TimelineManager) -> None:
+    """
+    Set up a demo timeline.
+    
+    Args:
+        timeline_manager (TimelineManager): Timeline manager
+    """
+    # Tạo một timeline demo
+    timeline = timeline_manager.create_timeline("timeline1", "Demo Timeline", loop=True)
+    
+    # Thêm các sự kiện
+    timeline_manager.add_effect_start_event("timeline1", "event1", 1, 0.0, 5.0)
+    timeline_manager.add_effect_start_event("timeline1", "event2", 2, 5.0, 5.0)
+    timeline_manager.add_effect_start_event("timeline1", "event3", 3, 10.0, 5.0)
+    
+    timeline_manager.add_crossfade_event("timeline1", "fade1", 1, 2, 5.0, 2.0)
+    timeline_manager.add_crossfade_event("timeline1", "fade2", 2, 3, 10.0, 2.0)
+    timeline_manager.add_crossfade_event("timeline1", "fade3", 3, 1, 15.0, 2.0)
+
+
 def main():
     args = parse_args()
     
@@ -272,6 +336,14 @@ def main():
                                  use_multiprocessing=config.USE_MULTIPROCESSING,
                                  batch_size=config.BATCH_SIZE)
     
+    # Khởi tạo device manager
+    device_manager = setup_demo_device_manager()
+    device_manager.start()
+    
+    # Nếu có config file cho thiết bị, tải từ file
+    if args.device_config and os.path.exists(args.device_config):
+        device_manager.load_config(args.device_config)
+    
     perf_monitor = PerformanceMonitor()
     memory_monitor = MemoryMonitor()
     memory_monitor.start()
@@ -295,6 +367,15 @@ def main():
     clustering_service.cluster_by_linear_groups(config.DEFAULT_LED_COUNT, config.CLUSTER_GROUP_SIZE)
     logger.info(f"Clustered {config.DEFAULT_LED_COUNT} LEDs into {len(clustering_service.clusters)} clusters")
     
+    # Khởi tạo timeline manager
+    timeline_manager = TimelineManager(effect_manager)
+    setup_demo_timeline(timeline_manager)
+    timeline_manager.start()
+    
+    # Nếu có config file cho timeline, tải từ file
+    if args.timeline_config and os.path.exists(args.timeline_config):
+        timeline_manager.load_timelines(args.timeline_config)
+    
     osc_handler = OSCHandlerFactory.create(effect_manager.effects, config.OSC_SERVER_IP, config.OSC_SERVER_PORT)
     osc_handler.start()
     logger.info(f"Started OSC server on {config.OSC_SERVER_IP}:{config.OSC_SERVER_PORT}")
@@ -315,6 +396,21 @@ def main():
                     logger.info(f"Status: {status}")
                     logger.info(f"Memory usage: {mem_usage['current']:.2f} MB")
                     
+        elif args.multi_device:
+            logger.info("Running with multi-device preview")
+            
+            multi_device_preview = MultiDevicePreview(
+                effect_manager=effect_manager,
+                device_manager=device_manager,
+                clustering_service=clustering_service
+            )
+            
+            # Nếu có config file cho layout, tải từ file
+            if args.layout_config and os.path.exists(args.layout_config):
+                multi_device_preview.layout_settings.load_from_file(args.layout_config)
+                
+            multi_device_preview.run()
+                
         elif args.preview:
             logger.info("Running with large-scale preview")
             
@@ -363,6 +459,9 @@ def main():
         memory_monitor.stop()
         
         osc_handler.stop()
+        
+        device_manager.stop()
+        timeline_manager.stop()
         
         distribution_service.shutdown()
         

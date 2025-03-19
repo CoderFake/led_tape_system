@@ -50,6 +50,7 @@ class Button:
         self.disabled = disabled
         self.state = "normal" 
         self.font = pygame.font.Font(None, 24)
+
         
     def draw(self, surface: pygame.Surface):
         """

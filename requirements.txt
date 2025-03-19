@@ -1,16 +1,22 @@
 # Core dependencies
 pygame>=2.1.0           # Graphics library for visualization
+pygame_gui>=0.6.9       # UI framework for pygame
 numpy>=1.20.0           # Numerical processing
 python-osc>=1.8.0       # OSC protocol support
 psutil>=5.8.0           # System monitoring
-python-dotenv==1.0.1     # Environment variable management
+python-dotenv==1.0.1    # Environment variable management
 
-# Optional dependencies for GPU acceleration
-# CUDA acceleration (NVIDIA GPUs)
-numba>=0.54.0; platform_system != "Darwin" or platform_machine != "arm64"
+# Network and communication
+websockets>=10.3        # WebSocket support
+aiohttp>=3.8.1          # Async HTTP client/server for REST API
+zeroconf>=0.38.0        # Service discovery
 
-# OpenCL acceleration (NVIDIA, AMD, Intel GPUs)
-pyopencl>=2021.1; platform_system != "Darwin" or platform_machine != "arm64"
+# Optimization
+numba>=0.54.0; platform_system != "Darwin" or platform_machine != "arm64"  # JIT compilation
+pyopencl>=2021.1; platform_system != "Darwin" or platform_machine != "arm64"  # OpenCL acceleration
+
+# UI and visualization
+pillow>=9.0.0           # Image processing
 
 # Optional dependencies for improved performance
 matplotlib>=3.4.0       # Plotting library (optional, for debug visualizations)

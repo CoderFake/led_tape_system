@@ -1,0 +1,31 @@
+# Core dependencies
+pygame>=2.1.0           # Graphics library for visualization
+numpy>=1.20.0           # Numerical processing
+python-osc>=1.8.0       # OSC protocol support
+psutil>=5.8.0           # System monitoring
+python-dotenv==1.0.1     # Environment variable management
+
+# Optional dependencies for GPU acceleration
+# CUDA acceleration (NVIDIA GPUs)
+numba>=0.54.0; platform_system != "Darwin" or platform_machine != "arm64"
+
+# OpenCL acceleration (NVIDIA, AMD, Intel GPUs)
+pyopencl>=2021.1; platform_system != "Darwin" or platform_machine != "arm64"
+
+# Optional dependencies for improved performance
+matplotlib>=3.4.0       # Plotting library (optional, for debug visualizations)
+scipy>=1.7.0            # Scientific computing (optional, for signal processing)
+
+# System-specific dependencies
+# Windows
+pywin32>=300; platform_system == "Windows"           # Windows API access
+
+# macOS
+pyobjc-core>=7.3; platform_system == "Darwin"        # Objective-C bridge for macOS
+
+# Development dependencies (optional)
+pytest>=6.2.5           # Testing framework
+pytest-cov>=2.12.1      # Test coverage
+flake8>=3.9.2           # Code linting
+black>=21.5b2           # Code formatting
+mypy>=0.812             # Type checking

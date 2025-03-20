@@ -20,293 +20,231 @@ logger = logging.getLogger(__name__)
 class LayoutSettings:
     """
     Settings for LED layout in multi-device preview.
+    """
+    def __init__(self):
         """
-    def __init__(self, effect_manager: EffectManager=None, device_manager: Optional[DeviceManager] = None,
-                clustering_service: Optional[ClusteringService] = None):
+        Initialize layout settings.
         """
-        Initialize the multi-device preview.
+        # Devices dictionary: {device_id: {name, led_count, position, rotation, color, segments}}
+        self.devices = {}
+        
+        # Segments dictionary: {segment_id: {device_id, start, end, position, rotation}}
+        self.segments = {}
+        
+        # Layout parameters
+        self.layout_type = "custom"
+        self.layout_params = {}
+        
+        # Display settings
+        self.background_color = (20, 20, 30)
+        self.grid_size = 20
+        self.show_grid = True
+        self.show_labels = True
+        self.show_device_boxes = True
+        self.show_segment_boxes = True
+            
+    def save_to_file(self, filename: str) -> bool:
+        """
+        Save layout settings to JSON file.
         
         Args:
-            effect_manager (EffectManager): Effect manager
-            device_manager (DeviceManager): Device manager
-            clustering_service (ClusteringService): Clustering service
+            filename (str): Filename to save to
+            
+        Returns:
+            bool: True if saved successfully
         """
-        self.effect_manager = effect_manager
-        self.device_manager = device_manager
-        self.clustering_service = clustering_service
+        try:
+            data = {
+                "devices": self.devices,
+                "segments": self.segments,
+                "layout_type": self.layout_type,
+                "layout_params": self.layout_params,
+                "background_color": self.background_color,
+                "grid_size": self.grid_size,
+                "show_grid": self.show_grid,
+                "show_labels": self.show_labels,
+                "show_device_boxes": self.show_device_boxes,
+                "show_segment_boxes": self.show_segment_boxes
+            }
+            
+            with open(filename, 'w') as f:
+                json.dump(data, f, indent=2)
+                
+            logger.info(f"Saved layout to {filename}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error saving layout: {e}")
+            return False
+            
+    def load_from_file(self, filename: str) -> bool:
+        """
+        Load layout settings from JSON file.
         
-        # Khởi tạo settings
-        self.layout_settings = LayoutSettings()
-        self.width = 1200
-        self.height = 800
-        self.background_color = (20, 20, 30)
-        self.fps = 60
+        Args:
+            filename (str): Filename to load from
+            
+        Returns:
+            bool: True if loaded successfully
+        """
+        try:
+            if not os.path.exists(filename):
+                logger.warning(f"Layout file not found: {filename}")
+                return False
+                
+            with open(filename, 'r') as f:
+                data = json.load(f)
+                
+            self.devices = data.get("devices", {})
+            self.segments = data.get("segments", {})
+            self.layout_type = data.get("layout_type", "custom")
+            self.layout_params = data.get("layout_params", {})
+            self.background_color = data.get("background_color", (20, 20, 30))
+            self.grid_size = data.get("grid_size", 10)
+            self.show_grid = data.get("show_grid", True)
+            self.show_labels = data.get("show_labels", True)
+            self.show_device_boxes = data.get("show_device_boxes", True)
+            self.show_segment_boxes = data.get("show_segment_boxes", True)
+            
+            logger.info(f"Loaded layout from {filename}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error loading layout: {e}")
+            return False
+            
+    def add_device(self, device_id: str, name: str, led_count: int, position: tuple = (0, 0), 
+                  rotation: float = 0.0, color: tuple = (200, 200, 200)) -> bool:
+        """
+        Add a device to the layout.
         
-        self.led_size = 5
-        self.led_spacing = 0
-        self.brightness = 1.0
-        
-        self.zoom = 1.0
-        self.pan_x = 0
-        self.pan_y = 0
-        self.show_labels = True
-        self.show_stats = True
-        self.show_controls = True
-        self.show_grid = True
-        self.grid_size = 20
-        
-        # Thông tin UI và xử lý tương tác
-        self.screen = None
-        self.font = None
-        self.big_font = None
-        self.clock = None
-        self.running = False
-        self.paused = False
-        
-        # Chuột và tương tác
-        self.dragging = False
-        self.drag_start = (0, 0)
-        self.selected_device = None
-        self.selected_segment = None
-        self.selected_led = None
-        self.edit_mode = False
-        
-        # Theo dõi hiệu suất
-        self.fps_history = []
-        self.render_times = []
-        self.last_frame_time = 0
-        
-
-        self.device_positions = {}  
-        self.segment_positions = {}
-        self.led_colors = {} 
-        
-        self.tools = ["pan", "select", "add_device", "add_segment", "edit", "delete"]
-        self.current_tool = "pan"
-        self.tool_buttons = {}  
-        
-        self.panels = {
-            "tools": pygame.Rect(10, 10, 50, 300),
-            "properties": pygame.Rect(70, 10, 300, 300),  
-            "devices": pygame.Rect(10, self.height - 210, 300, 200),  
-            "effects": pygame.Rect(self.width - 310, 10, 300, 300)  
+        Args:
+            device_id (str): Device ID
+            name (str): Device name
+            led_count (int): Number of LEDs
+            position (tuple): Device position (x, y)
+            rotation (float): Rotation in degrees
+            color (tuple): Device color
+            
+        Returns:
+            bool: True if added successfully
+        """
+        if device_id in self.devices:
+            logger.warning(f"Device {device_id} already exists in layout")
+            return False
+            
+        self.devices[device_id] = {
+            "name": name,
+            "led_count": led_count,
+            "position": position,
+            "rotation": rotation,
+            "color": color,
+            "segments": []
         }
-        self.collapsed_panels = set()
-        self.minimized_panels = set()  
-        self.dragging_panel = None
-        self.drag_offset = (0, 0)
-
-        self.ui_buttons = {} 
-        self.ui_dropdowns = {}  
-        self.ui_sliders = {}  
-
-        self.status_bar_height = 30
-        self.status_text = ""
         
-        self.lock = threading.RLock()
-
-        def save_to_file(self, filename: str) -> bool:
-            """
-            Save layout settings to JSON file.
+        logger.info(f"Added device {device_id} to layout")
+        return True
             
-            Args:
-                filename (str): Filename to save to
-                
-            Returns:
-                bool: True if saved successfully
-            """
-            try:
-                data = {
-                    "devices": self.devices,
-                    "segments": self.segments,
-                    "layout_type": self.layout_type,
-                    "layout_params": self.layout_params,
-                    "background_color": self.background_color,
-                    "grid_size": self.grid_size,
-                    "show_grid": self.show_grid,
-                    "show_labels": self.show_labels,
-                    "show_device_boxes": self.show_device_boxes,
-                    "show_segment_boxes": self.show_segment_boxes
-                }
-                
-                with open(filename, 'w') as f:
-                    json.dump(data, f, indent=2)
-                    
-                logger.info(f"Saved layout to {filename}")
-                return True
-                
-            except Exception as e:
-                logger.error(f"Error saving layout: {e}")
-                return False
-                
-        def load_from_file(self, filename: str) -> bool:
-            """
-            Load layout settings from JSON file.
+    def add_segment(self, segment_id: str, device_id: str, start: int, end: int, 
+                    position: tuple = None, rotation: float = None) -> bool:
+        """
+        Add a segment to the layout.
+        
+        Args:
+            segment_id (str): Segment ID
+            device_id (str): Device ID
+            start (int): Start LED index
+            end (int): End LED index
+            position (tuple): Segment position (x, y)
+            rotation (float): Rotation in degrees
             
-            Args:
-                filename (str): Filename to load from
-                
-            Returns:
-                bool: True if loaded successfully
-            """
-            try:
-                if not os.path.exists(filename):
-                    logger.warning(f"Layout file not found: {filename}")
-                    return False
-                    
-                with open(filename, 'r') as f:
-                    data = json.load(f)
-                    
-                self.devices = data.get("devices", {})
-                self.segments = data.get("segments", {})
-                self.layout_type = data.get("layout_type", "custom")
-                self.layout_params = data.get("layout_params", {})
-                self.background_color = data.get("background_color", (20, 20, 30))
-                self.grid_size = data.get("grid_size", 10)
-                self.show_grid = data.get("show_grid", True)
-                self.show_labels = data.get("show_labels", True)
-                self.show_device_boxes = data.get("show_device_boxes", True)
-                self.show_segment_boxes = data.get("show_segment_boxes", True)
-                
-                logger.info(f"Loaded layout from {filename}")
-                return True
-                
-            except Exception as e:
-                logger.error(f"Error loading layout: {e}")
-                return False
-                
-        def add_device(self, device_id: str, name: str, led_count: int, position: Tuple[int, int] = (0, 0), 
-                    rotation: float = 0.0, color: Tuple[int, int, int] = (200, 200, 200)) -> bool:
-            """
-            Add a device to the layout.
+        Returns:
+            bool: True if added successfully
+        """
+        if segment_id in self.segments:
+            logger.warning(f"Segment {segment_id} already exists in layout")
+            return False
             
-            Args:
-                device_id (str): Device ID
-                name (str): Device name
-                led_count (int): Number of LEDs
-                position (Tuple[int, int]): Device position (x, y)
-                rotation (float): Rotation in degrees
-                color (Tuple[int, int, int]): Device color
-                
-            Returns:
-                bool: True if added successfully
-            """
-            if device_id in self.devices:
-                logger.warning(f"Device {device_id} already exists in layout")
-                return False
-                
-            self.devices[device_id] = {
-                "name": name,
-                "led_count": led_count,
-                "position": position,
-                "rotation": rotation,
-                "color": color,
-                "segments": []
-            }
+        if device_id not in self.devices:
+            logger.warning(f"Device {device_id} not found in layout")
+            return False
             
-            logger.info(f"Added device {device_id} to layout")
-            return True
+        if start < 0 or end >= self.devices[device_id]["led_count"] or start > end:
+            logger.warning(f"Invalid segment range: {start}-{end}")
+            return False
             
-        def add_segment(self, segment_id: str, device_id: str, start: int, end: int, 
-                    position: Tuple[int, int] = None, rotation: float = None) -> bool:
-            """
-            Add a segment to the layout.
+        # Use device position and rotation if not specified
+        if position is None:
+            position = self.devices[device_id]["position"]
             
-            Args:
-                segment_id (str): Segment ID
-                device_id (str): Device ID
-                start (int): Start LED index
-                end (int): End LED index
-                position (Tuple[int, int]): Segment position (x, y)
-                rotation (float): Rotation in degrees
+        if rotation is None:
+            rotation = self.devices[device_id]["rotation"]
+            
+        self.segments[segment_id] = {
+            "device_id": device_id,
+            "start": start,
+            "end": end,
+            "position": position,
+            "rotation": rotation
+        }
+        
+        # Add segment to device's segment list
+        self.devices[device_id]["segments"].append(segment_id)
+        
+        logger.info(f"Added segment {segment_id} to device {device_id}")
+        return True
+            
+    def remove_device(self, device_id: str) -> bool:
+        """
+        Remove a device from the layout.
+        
+        Args:
+            device_id (str): Device ID
+            
+        Returns:
+            bool: True if removed successfully
+        """
+        if device_id not in self.devices:
+            logger.warning(f"Device {device_id} not found in layout")
+            return False
+            
+        # Remove all segments belonging to the device
+        for segment_id in list(self.segments.keys()):
+            if self.segments[segment_id]["device_id"] == device_id:
+                del self.segments[segment_id]
                 
-            Returns:
-                bool: True if added successfully
-            """
-            if segment_id in self.segments:
-                logger.warning(f"Segment {segment_id} already exists in layout")
-                return False
-                
-            if device_id not in self.devices:
-                logger.warning(f"Device {device_id} not found in layout")
-                return False
-                
-            if start < 0 or end >= self.devices[device_id]["led_count"] or start > end:
-                logger.warning(f"Invalid segment range: {start}-{end}")
-                return False
-                
-            # Sử dụng vị trí và góc của thiết bị nếu không được chỉ định
-            if position is None:
-                position = self.devices[device_id]["position"]
-                
-            if rotation is None:
-                rotation = self.devices[device_id]["rotation"]
-                
-            self.segments[segment_id] = {
-                "device_id": device_id,
-                "start": start,
-                "end": end,
-                "position": position,
-                "rotation": rotation
-            }
+        # Remove the device
+        del self.devices[device_id]
+        
+        logger.info(f"Removed device {device_id} from layout")
+        return True
             
-            # Thêm segment vào danh sách segment của thiết bị
-            self.devices[device_id]["segments"].append(segment_id)
+    def remove_segment(self, segment_id: str) -> bool:
+        """
+        Remove a segment from the layout.
+        
+        Args:
+            segment_id (str): Segment ID
             
-            logger.info(f"Added segment {segment_id} to device {device_id}")
-            return True
+        Returns:
+            bool: True if removed successfully
+        """
+        if segment_id not in self.segments:
+            logger.warning(f"Segment {segment_id} not found in layout")
+            return False
             
-        def remove_device(self, device_id: str) -> bool:
-            """
-            Remove a device from the layout.
-            
-            Args:
-                device_id (str): Device ID
+        device_id = self.segments[segment_id]["device_id"]
+        
+        # Remove segment from device's segment list
+        if device_id in self.devices:
+            if segment_id in self.devices[device_id]["segments"]:
+                self.devices[device_id]["segments"].remove(segment_id)
                 
-            Returns:
-                bool: True if removed successfully
-            """
-            if device_id not in self.devices:
-                logger.warning(f"Device {device_id} not found in layout")
-                return False
-                
-            # Xóa tất cả các segment thuộc thiết bị
-            for segment_id in list(self.segments.keys()):
-                if self.segments[segment_id]["device_id"] == device_id:
-                    del self.segments[segment_id]
-                    
-            # Xóa thiết bị
-            del self.devices[device_id]
-            
-            logger.info(f"Removed device {device_id} from layout")
-            return True
-            
-        def remove_segment(self, segment_id: str) -> bool:
-            """
-            Remove a segment from the layout.
-            
-            Args:
-                segment_id (str): Segment ID
-                
-            Returns:
-                bool: True if removed successfully
-            """
-            if segment_id not in self.segments:
-                logger.warning(f"Segment {segment_id} not found in layout")
-                return False
-                
-            device_id = self.segments[segment_id]["device_id"]
-            
-            # Xóa segment khỏi danh sách segment của thiết bị
-            if device_id in self.devices:
-                if segment_id in self.devices[device_id]["segments"]:
-                    self.devices[device_id]["segments"].remove(segment_id)
-                    
-            # Xóa segment
-            del self.segments[segment_id]
-            
-            logger.info(f"Removed segment {segment_id} from layout")
-            return True
+        # Remove segment
+        del self.segments[segment_id]
+        
+        logger.info(f"Removed segment {segment_id} from layout")
+        return True
 
 
 class MultiDevicePreview:
@@ -328,7 +266,7 @@ class MultiDevicePreview:
         self.device_manager = device_manager
         self.clustering_service = clustering_service
         
-        # Khởi tạo settings
+        # Initialize settings
         self.layout_settings = LayoutSettings()
         self.width = 1200
         self.height = 800
@@ -348,7 +286,7 @@ class MultiDevicePreview:
         self.show_grid = True
         self.grid_size = 20
         
-        # Thông tin UI và xử lý tương tác
+        # UI and interaction info
         self.screen = None
         self.font = None
         self.big_font = None
@@ -356,7 +294,7 @@ class MultiDevicePreview:
         self.running = False
         self.paused = False
         
-        # Chuột và tương tác
+        # Mouse and interaction
         self.dragging = False
         self.drag_start = (0, 0)
         self.selected_device = None
@@ -364,33 +302,46 @@ class MultiDevicePreview:
         self.selected_led = None
         self.edit_mode = False
         
-        # Theo dõi hiệu suất
+        # Performance tracking
         self.fps_history = []
         self.render_times = []
         self.last_frame_time = 0
         
-        # Dữ liệu LED và segment
+        # LED and segment data
         self.device_positions = {}  # {device_id: [(x, y), ...]}
         self.segment_positions = {}  # {segment_id: [(x, y), ...]}
         self.led_colors = {}  # {device_id: [(r, g, b), ...]}
         
-        # Các công cụ trong UI
+        # UI tools
         self.tools = ["pan", "select", "add_device", "add_segment", "edit", "delete"]
         self.current_tool = "pan"
         self.tool_buttons = {}  # {tool: rect}
         
-        # Các panel UI
+        # UI panels
         self.panels = {
             "tools": pygame.Rect(10, 10, 50, 300),
-            "properties": pygame.Rect(self.width - 310, 10, 300, 300),
+            "properties": pygame.Rect(70, 10, 300, 300),
             "devices": pygame.Rect(10, self.height - 210, 300, 200),
-            "effects": pygame.Rect(self.width - 310, self.height - 210, 300, 200)
+            "effects": pygame.Rect(self.width - 310, 10, 300, 300)
         }
         self.collapsed_panels = set()
+        self.minimized_panels = set()
         self.dragging_panel = None
         self.drag_offset = (0, 0)
         
-        # Khóa thread
+        # UI controls
+        self.ui_buttons = {}  # {button_id: {rect, text, active, hover}}
+        self.ui_dropdowns = {}  # {dropdown_id: {rect, options, selected_index, open, hover_index}}
+        self.ui_sliders = {}  # {slider_id: {rect, min_value, max_value, value, dragging}}
+        
+        # Context menu
+        self.context_menu = None  # {rect, options, hover_index}
+        
+        # Status bar
+        self.status_bar_height = 30
+        self.status_text = ""
+        
+        # Thread lock
         self.lock = threading.RLock()
     
     def initialize(self):
@@ -407,17 +358,17 @@ class MultiDevicePreview:
         self.font = pygame.font.Font(None, 24)
         self.big_font = pygame.font.Font(None, 36)
         
-        # Khởi tạo vị trí công cụ
+        # Initialize tool positions
         tool_y = 20
         for tool in self.tools:
             self.tool_buttons[tool] = pygame.Rect(20, tool_y, 30, 30)
             tool_y += 40
         
-        # Tạo layout mặc định nếu chưa có
+        # Create default layout if none exists
         if not self.layout_settings.devices:
             self._create_default_layout()
             
-        # Khởi tạo vị trí LED dựa trên layout
+        # Initialize LED positions based on layout
         self._generate_positions()
         
         logger.info(f"Initialized multi-device preview")
@@ -426,12 +377,12 @@ class MultiDevicePreview:
         """
         Create a default layout with some devices and segments.
         """
-        # Thêm một số thiết bị mẫu
+        # Add some sample devices
         self.layout_settings.add_device("dev1", "ESP32-1", 150, (200, 200), 0, (255, 100, 100))
         self.layout_settings.add_device("dev2", "ESP32-2", 150, (400, 400), 90, (100, 255, 100))
         self.layout_settings.add_device("dev3", "ESP32-3", 150, (600, 200), 180, (100, 100, 255))
         
-        # Thêm các segment cho từng thiết bị
+        # Add segments for each device
         self.layout_settings.add_segment("seg1", "dev1", 0, 49, (200, 200), 0)
         self.layout_settings.add_segment("seg2", "dev1", 50, 99, (250, 200), 0)
         self.layout_settings.add_segment("seg3", "dev1", 100, 149, (300, 200), 0)
@@ -450,27 +401,27 @@ class MultiDevicePreview:
             self.device_positions = {}
             self.segment_positions = {}
             
-            # Tính toán vị trí LED cho từng thiết bị
+            # Calculate LED positions for each device
             for device_id, device_info in self.layout_settings.devices.items():
                 led_count = device_info["led_count"]
                 device_pos = device_info["position"]
                 rotation = device_info["rotation"]
                 
-                # Tạo vị trí mặc định cho tất cả LED trong thiết bị
+                # Create default positions for all LEDs in the device
                 positions = []
                 
                 for i in range(led_count):
-                    # Đặt LED theo đường thẳng ngang
+                    # Position LEDs in a horizontal line
                     x = device_pos[0] + i * (self.led_size + self.led_spacing) * math.cos(math.radians(rotation))
                     y = device_pos[1] + i * (self.led_size + self.led_spacing) * math.sin(math.radians(rotation))
                     positions.append((x, y))
                     
                 self.device_positions[device_id] = positions
                 
-                # Khởi tạo màu LED là đen
+                # Initialize LED colors as black
                 self.led_colors[device_id] = [(0, 0, 0)] * led_count
                 
-            # Tạo vị trí LED cho từng segment
+            # Create LED positions for each segment
             for segment_id, segment_info in self.layout_settings.segments.items():
                 device_id = segment_info["device_id"]
                 start = segment_info["start"]
@@ -486,11 +437,11 @@ class MultiDevicePreview:
         Update LED colors from active effects.
         """
         with self.lock:
-            # Thiết lập màu đen cho tất cả LED
+            # Set all LEDs to black
             for device_id, positions in self.device_positions.items():
                 self.led_colors[device_id] = [(0, 0, 0)] * len(positions)
                 
-            # Lấy màu từ các hiệu ứng đang hoạt động
+            # Get colors from active effects
             effects = self.effect_manager.effects
             active_effect_ids = self.effect_manager.active_effect_ids
             
@@ -500,7 +451,7 @@ class MultiDevicePreview:
                     
                 effect = effects[effect_id]
                 
-                # Áp dụng màu từ hiệu ứng cho các segment
+                # Apply colors from effects to segments
                 for segment_id, segment_info in self.layout_settings.segments.items():
                     device_id = segment_info["device_id"]
                     start = segment_info["start"]
@@ -509,22 +460,22 @@ class MultiDevicePreview:
                     if device_id not in self.led_colors:
                         continue
                         
-                    # Lấy màu đầu ra của hiệu ứng
+                    # Get effect output colors
                     effect_colors = effect.get_led_output()
                     effect_led_count = len(effect_colors)
                     
                     if effect_led_count == 0:
                         continue
                     
-                    # Map màu từ hiệu ứng vào segment
+                    # Map colors from effect to segment
                     segment_length = end - start + 1
                     
                     for i in range(segment_length):
-                        # Map index từ segment sang effect
+                        # Map index from segment to effect
                         effect_idx = min(int(i * effect_led_count / segment_length), effect_led_count - 1)
                         
                         if effect_idx < len(effect_colors):
-                            # Kết hợp màu (lấy giá trị lớn nhất)
+                            # Combine colors (take max value)
                             led_idx = start + i
                             if led_idx < len(self.led_colors[device_id]):
                                 current_color = self.led_colors[device_id][led_idx]
@@ -1373,6 +1324,53 @@ class MultiDevicePreview:
                     led_label = self.font.render(str(i), True, (150, 150, 150))
                     self.screen.blit(led_label, (screen_x + led_size + 2, screen_y - 10))
     
+    def _draw_responsive_panels(self):
+        """
+        Vẽ các panel UI responsive với nền trong suốt
+        """
+        for panel_id, panel in self.panels.items():
+            rect = panel['rect']
+            
+            # Vẽ header của panel với nền trong suốt
+            header_rect = pygame.Rect(rect.x, rect.y, rect.width, 30)
+            header_surface = pygame.Surface((rect.width, 30), pygame.SRCALPHA)
+            header_surface.fill((60, 60, 80, 180))  # Màu với độ trong suốt
+            self.screen.blit(header_surface, header_rect)
+            pygame.draw.rect(self.screen, (100, 100, 120, 180), header_rect, 1)
+            
+            # Vẽ tiêu đề
+            title_surface = self.font.render(panel['title'], True, (220, 220, 220))
+            title_rect = title_surface.get_rect(midleft=(rect.x + 10, rect.y + 15))
+            self.screen.blit(title_surface, title_rect)
+            
+            # Vẽ nút collapse
+            collapse_rect = pygame.Rect(rect.x + rect.width - 30, rect.y, 30, 30)
+            collapse_surface = pygame.Surface((30, 30), pygame.SRCALPHA)
+            collapse_surface.fill((80, 80, 100, 180))
+            self.screen.blit(collapse_surface, collapse_rect)
+            
+            if panel['collapsed']:
+                # Vẽ dấu +
+                pygame.draw.line(self.screen, (220, 220, 220), 
+                                (collapse_rect.centerx - 5, collapse_rect.centery),
+                                (collapse_rect.centerx + 5, collapse_rect.centery), 2)
+                pygame.draw.line(self.screen, (220, 220, 220), 
+                                (collapse_rect.centerx, collapse_rect.centery - 5),
+                                (collapse_rect.centerx, collapse_rect.centery + 5), 2)
+            else:
+                # Vẽ dấu -
+                pygame.draw.line(self.screen, (220, 220, 220), 
+                                (collapse_rect.centerx - 5, collapse_rect.centery),
+                                (collapse_rect.centerx + 5, collapse_rect.centery), 2)
+                
+                # Vẽ body của panel với nền trong suốt
+                body_rect = pygame.Rect(rect.x, rect.y + 30, rect.width, rect.height - 30)
+                body_surface = pygame.Surface((rect.width, rect.height - 30), pygame.SRCALPHA)
+                body_surface.fill((40, 40, 50, 150))  # Màu với độ trong suốt
+                self.screen.blit(body_surface, body_rect)
+                pygame.draw.rect(self.screen, (100, 100, 120, 180), body_rect, 1)
+
+
     def _draw_tools(self):
         """
         Draw tools panel.
@@ -1387,7 +1385,7 @@ class MultiDevicePreview:
         self.screen.blit(title_surface, (tools_rect.x + 5, tools_rect.y + 5))
         
         # Vẽ các nút công cụ
-        y_offset = tools_rect.y + 30
+        y_offset = tools_rect.y + 200
         for tool in self.tools:
             tool_rect = pygame.Rect(tools_rect.x + 10, y_offset, 30, 30)
             
